@@ -1,822 +1,2153 @@
-# Research Charter: Options-Informed Systematic Equity Research Platform
+# Research Charter: Volatility Surface Research Lab
 
-## 1. Core Hypothesis
-
-This project tests whether traditional cross-sectional equity alpha factors — value, momentum, quality, short-term reversal, and analyst revisions — achieve stronger out-of-sample risk-adjusted performance, lower drawdowns, and improved tail-risk profiles when conditioned on forward-looking option-implied risk characteristics.
-
-The central research question is:
-
-> Do options-implied variables such as volatility risk premium, put-call skew, implied volatility level, and implied volatility term structure improve the robustness of systematic equity signals?
-
-This project does not assume that options data will improve performance. The options-informed layer will be evaluated against clearly defined equity-only baselines and may be formally rejected if it fails out of sample.
+## From Stochastic Pricing to Cross-Sectional Alpha
 
 ---
 
-## 2. Investment Universe and Boundaries
+## 1. Project Title
 
-### Asset Class
+**Volatility Surface Research Lab: From Stochastic Pricing to Cross-Sectional Alpha**
 
-US liquid common equities.
-
-### Equity Universe
-
-The base equity universe will consist of CRSP common stocks with share codes 10 and 11.
-
-### Optionable Universe
-
-The final tradable universe will be restricted to underlying securities with active and sufficiently liquid option chains available in OptionMetrics IvyDB US.
-
-### Liquidity Screens
-
-Securities will be excluded if they meet any of the following conditions:
-
-- Price below `$5`.
-- Rolling 21-day average daily dollar volume below the 20th percentile of the eligible universe.
-- Missing or unreliable CRSP return data.
-- Insufficient price history for signal construction.
-
-### Option Liquidity Screens
-
-Underlying securities will be excluded if their corresponding option chains fail liquidity or quality checks, including:
-
-- Zero open interest in the relevant front expiries.
-- Missing implied volatility.
-- Invalid bid/ask quotes.
-- Average bid-ask spread wider than a predefined threshold.
-- Insufficient contracts near target maturity or moneyness/delta buckets.
-
-### Rebalancing Frequency
-
-Monthly.
-
-Signals are formed using data available after the close of the final trading day of month `t`.
-
-Portfolio trades are executed on the next trading day to avoid same-close lookahead bias.
-
----
-
-## 3. Data Sources
-
-The project will use institutional datasets available through WRDS and university subscriptions.
-
-### Primary Datasets
-
-#### CRSP
-
-Daily and monthly stock prices, returns, volume, shares outstanding, delisting returns, and identifiers.
-
-#### Compustat
-
-Fundamental accounting variables for value, quality, profitability, leverage, and size-related features.
-
-#### I/B/E/S
-
-Analyst forecast data, consensus EPS estimates, forecast revisions, and recommendation-related variables where available.
-
-#### OptionMetrics IvyDB US
-
-Historical option prices, implied volatility, Greeks, volume, open interest, option identifiers, and underlying security links.
-
-### Optional Datasets
-
-#### FTSE Russell / Index Holdings
-
-Benchmark or index membership analysis.
-
-#### Eventus
-
-Event-study validation using CRSP-linked event windows.
-
-#### Capital IQ Transcripts / Factiva / Nexis
-
-Possible later-stage event or text-based extensions. These are not part of the core project.
-
----
-
-## 4. Point-in-Time and Lookahead Policy
-
-All features must be constructed using only information that would have been observable before portfolio formation.
-
-### Timing Rules
-
-#### CRSP Price, Return, and Volume Data
-
-Available after market close on the observation date.
-
-#### OptionMetrics Data
-
-Option-implied variables are constructed only from option quotes available at or before the signal formation date.
-
-#### Compustat Fundamentals
-
-Lagged by at least 3 to 6 months after fiscal period end to reduce publication and restatement lookahead bias.
-
-#### I/B/E/S Forecasts
-
-Only forecast snapshots available before the rebalance date may be used.
-
-#### Portfolio Execution
-
-Signals formed after month-end close are traded on the next trading day.
-
-### Survivorship Policy
-
-The historical universe must be formed using securities available at each point in time, not today’s surviving securities.
-
-CRSP delisting returns will be included where available.
-
----
-
-## 5. Data Splits and Regime Testing
-
-To reduce lookahead bias, data snooping, and repeated tuning on the test set, the historical panel will be divided into distinct research periods.
-
-### In-Sample Estimation / Training Window
-
-Example:
-
-- January 2005 to December 2016.
-
-Purpose:
-
-- Signal engineering.
-- Data cleaning rules.
-- Baseline model fitting.
-- Neutralisation calibration.
-- Initial feature selection.
-- Cost model calibration.
-
-### Out-of-Sample Test Window
-
-Example:
-
-- January 2017 to December 2025.
-
-Purpose:
-
-- Isolated walk-forward testing.
-- Final model comparison.
-- No parameter tuning using this period.
-- Evaluation across multiple market regimes.
-
-### Regime Periods to Examine
-
-The out-of-sample period should include distinct stress regimes where possible:
-
-- 2018 volatility spike.
-- 2020 COVID crash.
-- 2021 speculative / low-rate environment.
-- 2022 rate-hike and inflation shock.
-- 2023 to 2025 post-hike / AI-led market regime.
-
-If the final dataset begins earlier than 2005, additional crisis periods such as 2008 may be used for regime testing.
-
----
-
-## 6. Signal Architecture
-
-The project separates the physical equity world from the risk-neutral options-implied world.
-
----
-
-## A. Equity Baseline Features: Physical-World Signals
-
-These features are built from historical realized returns, accounting data, and analyst expectations.
-
-### Momentum
-
-Source: CRSP.
-
-Definition:
-
-- 12-minus-1 month cumulative log return.
-- Cumulative return from month `t-12` to month `t-1`, skipping the most recent month.
-
-Purpose:
-
-- Captures medium-term trend continuation while reducing short-term reversal contamination.
-
-### Short-Term Reversal
-
-Source: CRSP.
-
-Definition:
-
-- Negative previous 5-day or 21-day log return.
-
-Purpose:
-
-- Captures short-horizon reversal effects.
-
-### Value
-
-Source: Compustat.
-
-Possible definitions:
-
-- Book-to-market.
-- Earnings yield.
-- Sales-to-price.
-- Cash-flow-to-price.
-
-All fundamental variables must be lagged by at least 3 to 6 months.
-
-### Quality
-
-Source: Compustat.
-
-Possible definitions:
-
-- Return on equity.
-- Gross profitability.
-- Earnings stability.
-- Low leverage.
-- Accruals quality.
-
-Initial proxy:
-
-- ROE residualised against leverage or combined with leverage controls.
-
-### Analyst Revisions
-
-Source: I/B/E/S.
-
-Possible definitions:
-
-- 30-day change in consensus forward EPS estimate.
-- Change in number of upward vs downward revisions.
-- Forecast dispersion.
-- Recommendation changes.
-
-Purpose:
-
-- Captures changing analyst expectations and information diffusion.
-
----
-
-## B. Options Conditioning Features: Risk-Neutral / Forward-Looking Signals
-
-These features are built from option-market prices and implied quantities.
-
-### At-the-Money Implied Volatility
-
-Source: OptionMetrics IvyDB US.
-
-Definitions:
-
-- 30-day ATM implied volatility.
-- 91-day ATM implied volatility.
-
-Purpose:
-
-- Measures the options market’s forward-looking uncertainty estimate.
-
-### Realized Volatility
-
-Source: CRSP.
-
-Definition:
-
-- Rolling 21-day or 63-day historical realized volatility.
-
-Purpose:
-
-- Measures the stock’s recent physical-world volatility.
-
-### Volatility Risk Premium
-
-Source: OptionMetrics and CRSP.
-
-Initial definition:
-
-- `VRP = 30-day ATM implied volatility - rolling 21-day realized volatility`
-
-Alternative variance-based definition:
-
-- `VRP = implied variance - realized variance`
-
-Purpose:
-
-- Captures the gap between option-implied risk and recently realized risk.
-
-### Put-Call Skew
-
-Source: OptionMetrics.
-
-Initial definition:
-
-- `IV of 25-delta put - IV of 25-delta call`
-
-Purpose:
-
-- Captures market pricing of downside protection relative to upside exposure.
-
-### Implied Volatility Term Structure
-
-Source: OptionMetrics.
-
-Definition:
-
-- `91-day ATM implied volatility - 30-day ATM implied volatility`
-
-Purpose:
-
-- Captures whether near-term uncertainty is elevated or suppressed relative to longer-term uncertainty.
-
-### Option Liquidity and Activity
-
-Source: OptionMetrics.
-
-Possible features:
-
-- Option volume.
-- Open interest.
-- Put-call volume ratio.
-- Option bid-ask spread.
-- Option volume relative to stock volume.
-
-Purpose:
-
-- Distinguishes usable option-implied information from noisy or illiquid option quotes.
-
----
-
-## 7. Target Variable
-
-The primary prediction target is:
-
-> 21-trading-day forward excess return relative to the cap-weighted eligible-universe benchmark.
-
-Formula:
+Repository name:
 
 ```text
-target_i,t = R_i,t→t+21 - R_benchmark,t→t+21
+vol-surface-alpha-lab
 ```
 
-Returns should include delisting returns where available.
+Alternative CV title:
 
-### Alternative Targets for Robustness
-
-- Next-month raw return.
-- Next-month sector-relative return.
-- Next-month residual return after market, sector, and style factor adjustment.
-- Next-month downside-adjusted return.
-- Future realized volatility.
-- Future drawdown indicator.
+```text
+Options-Implied Risk and Equity Alpha Research Platform
+```
 
 ---
 
-## 8. Baseline Models
+## 2. One-Sentence Summary
 
-The project will compare multiple models to avoid evaluating the options-informed model against a weak strawman.
-
-### Model 0: Naive Benchmark
-
-Definition:
-
-- Equal-weight or cap-weight eligible-universe benchmark.
-
-Purpose:
-
-- Measures whether active modelling adds anything beyond passive exposure.
-
-### Model 1: Equity-Only Model
-
-Uses only physical-world equity features:
-
-- Momentum.
-- Reversal.
-- Value.
-- Quality.
-- Analyst revisions.
-- Size and liquidity controls.
-
-Purpose:
-
-- Establishes the baseline systematic equity alpha model.
-
-### Model 2: Options-Only Model
-
-Uses only option-derived features:
-
-- Implied volatility.
-- Volatility risk premium.
-- Put-call skew.
-- Term structure.
-- Option liquidity and activity.
-
-Purpose:
-
-- Tests whether options-implied variables have standalone cross-sectional predictive content.
-
-### Model 3: Options-Informed Equity Model
-
-Uses both equity and options features.
-
-Purpose:
-
-- Tests whether options-implied information improves or conditions traditional equity alpha signals.
-
-Potential interaction terms:
-
-- Momentum × implied volatility.
-- Momentum × skew.
-- Value × skew.
-- Quality × volatility risk premium.
-- Revisions × implied volatility term structure.
-
-
-## 9. Modelling Methodology
-
-The first modelling layer will remain interpretable before any complex machine learning is added.
-
-### Initial Models
-
-- Equal-weight composite score.
-- Linear cross-sectional regression.
-- Ridge regression.
-- Lasso / elastic net.
-
-### Optional Later Models
-
-- Gradient boosted trees.
-- Random forests.
-- Classification model for top-quintile membership.
-
-Nonlinear models may only be added after the linear baseline is fully implemented, documented, and evaluated.
-
-### Validation Approach
-
-- Rolling-window validation.
-- Expanding-window validation.
-- Walk-forward out-of-sample testing.
-- No random train/test splits.
-- No tuning on the final out-of-sample period.
-
-### Evaluation Metrics
-
-- Information coefficient.
-- Rank information coefficient.
-- IC t-statistic.
-- Quintile spread returns.
-- Out-of-sample R².
-- Hit rate.
-- Sharpe ratio.
-- Information ratio.
-- Max drawdown.
-- Sortino ratio.
-- 5% CVaR.
-- Turnover-adjusted return.
+This project builds a mathematical finance and empirical research platform that implements stochastic process simulation, option pricing, Greeks, implied-volatility inversion, volatility-surface construction, SABR calibration, and risk-neutral density extraction from first principles, then applies those tools to real option-chain and equity data to test whether mathematically derived option-surface features improve volatility forecasting, cross-sectional equity selection, drawdown control, hedging decisions, and portfolio construction.
 
 ---
 
-## 10. Portfolio Construction Rules
+## 3. Core Research Motivation
 
-The project will evaluate signals both before and after portfolio construction.
+Traditional systematic equity research often uses signals such as momentum, value, quality, analyst revisions, volatility, and liquidity to forecast future stock returns. Separately, mathematical finance and derivatives research studies how option prices encode market expectations about volatility, skew, tail risk, and hedging costs.
 
-### Diagnostic Portfolios
+This project is motivated by the idea that these two worlds should not be treated separately.
 
-- Quintile portfolios.
-- Top-minus-bottom long-short portfolios.
-- Equal-weight top-N / bottom-N portfolios.
+The options market contains forward-looking information about uncertainty, downside protection, volatility risk premia, and risk-neutral probability distributions. A traditional equity signal may look attractive in isolation, but its usefulness may depend heavily on the risk being priced in the options market.
 
-Purpose:
+For example:
 
-- Understand signal behaviour before optimization.
+* A stock may have strong momentum but extreme downside skew.
+* A value stock may look cheap but have a risk-neutral density with a fat left tail.
+* A quality stock may have stable fundamentals and relatively cheap implied volatility.
+* A high-revision stock may already have uncertainty fully priced into its options.
+* A portfolio may have positive expected alpha but hidden exposure to volatility shocks, skew, liquidity, or crash risk.
 
-### Implementable Portfolios
-
-The final portfolio construction layer will convert expected returns into weights under realistic constraints.
-
-Possible optimization objective:
-
-- Maximize expected alpha.
-- Penalize predicted portfolio risk.
-- Penalize transaction costs.
-- Penalize excessive exposure to option-implied risk.
-
-Conceptual objective:
-
-- Maximize: alphaᵀw - λwᵀΣw - cost(w - w_prev) - γ(option_risk_penalty)
-
-### Portfolio Types to Compare
-
-- Equity-only long-short portfolio.
-- Options-informed long-short portfolio.
-- Long-only constrained version, if time allows.
+The central aim of this project is therefore to derive option-implied risk features from first principles and test whether they improve empirical equity and volatility research.
 
 ---
 
-## 11. Risk Controls
+## 4. Core Research Question
 
-The portfolio must be evaluated not just by return, but by the risks taken to earn that return.
-
-### Required Controls
-
-- Market beta exposure bounded close to zero for long-short portfolios.
-- Sector exposure bounded relative to benchmark.
-- Single-name maximum weight.
-- Gross exposure limit.
-- Net exposure limit.
-- Monthly turnover limit.
-- Minimum equity liquidity threshold.
-- Minimum option liquidity threshold.
-
-### Risk Model
-
-A basic factor risk model will decompose stock returns into:
-
-- Market factor.
-- Sector or industry factors.
-- Size factor.
-- Value factor.
-- Momentum factor.
-- Volatility factor.
-- Idiosyncratic residual.
-
-The risk model will be used to measure:
-
-- Portfolio beta.
-- Sector exposures.
-- Style exposures.
-- Predicted volatility.
-- Specific risk.
-- Factor contribution to risk.
+Can option-surface quantities derived from first-principles pricing models improve equity selection, volatility forecasting, hedging decisions, and portfolio risk control beyond traditional equity signals and vendor-provided option fields?
 
 ---
 
-## 12. Realism and Transaction Cost Constraints
+## 5. Main Hypotheses
 
-### Base Transaction Cost Model
+### H1: Volatility Forecasting Hypothesis
 
-Initial assumption:
+Option-surface features derived from cleaned option chains predict future realized volatility better than historical realized volatility alone.
 
-- 5 bps one-way equity transaction cost.
+Examples of relevant features:
 
-This accounts for simplified execution slippage, bid-ask spread, and commissions.
-
-### Robustness Cost Scenarios
-
-The strategy must be tested under:
-
-- 0 bps.
-- 5 bps.
-- 10 bps.
-- 25 bps.
-
-Later versions may use a liquidity-scaled cost model based on:
-
-- Bid-ask spread proxy.
-- Average daily dollar volume.
-- Trade size as percentage of ADV.
-- Realized volatility.
-- Turnover.
-
-### Turnover Policy
-
-The strategy must report:
-
-- Monthly turnover.
-- Annualized turnover.
-- Transaction cost drag.
-- Gross return.
-- Net return.
-- Percentage of gross alpha absorbed by costs.
-
-If transaction costs fully absorb the gross outperformance, the strategy fails.
+```text
+ATM implied volatility
+volatility risk premium
+SABR alpha
+SABR nu
+term structure slope
+risk-neutral variance
+risk-neutral kurtosis
+option liquidity
+```
 
 ---
 
-## 13. Option Data Quality Rules
+### H2: Tail-Risk Hypothesis
 
-Option observations will be excluded if any of the following hold:
+Risk-neutral density features such as implied skewness, implied kurtosis, and left-tail probability contain useful information about future drawdowns, negative return events, and downside risk.
 
-- Bid is less than or equal to zero.
-- Ask is less than or equal to bid.
-- Implied volatility is missing.
-- Delta is missing where delta-based buckets are required.
-- Open interest equals zero in target contracts.
-- Bid-ask spread exceeds the chosen threshold.
-- Time to maturity is outside the target interpolation range.
-- Moneyness or delta is too far from the target bucket.
-- Implied volatility is extreme or clearly erroneous.
+Examples of relevant features:
 
-Where practical, the project will include sanity checks for:
-
-- Put-call parity violations.
-- Implausible implied volatility jumps.
-- Missing option chains.
-- Stale quotes.
-- Coverage changes over time.
+```text
+risk-neutral skewness
+risk-neutral kurtosis
+left-tail probability
+put-call skew
+SABR rho
+surface curvature
+crash-probability proxy
+```
 
 ---
 
-## 14. Attribution Plan
+### H3: Surface-Derived Feature Hypothesis
 
-Performance will be decomposed to identify whether the options-informed layer adds genuine value or merely changes risk exposure.
+Self-derived volatility-surface features add information beyond simple vendor-provided options fields such as ATM implied volatility, raw skew, option volume, and open interest.
 
-### Attribution Dimensions
+The key comparison is:
 
-- Equity-signal contribution.
-- Options-signal contribution.
-- Market beta contribution.
-- Sector contribution.
-- Style factor contribution.
-- Volatility exposure contribution.
-- Long book contribution.
-- Short book contribution.
-- Transaction cost drag.
-- Turnover drag.
-- Drawdown contribution.
-
-### Specific Questions
-
-- Did options information improve returns?
-- Did options information reduce drawdowns?
-- Did options information reduce exposure to crash-prone names?
-- Did options information simply proxy for volatility, size, or liquidity?
-- Did the improvement survive after factor neutralisation?
-- Was performance concentrated in a small number of names, sectors, or regimes?
+```text
+vendor options fields
+vs
+self-derived implied volatility / skew / VRP
+vs
+SABR surface features
+vs
+risk-neutral density features
+```
 
 ---
 
-## 15. Robustness Tests
+### H4: Equity Signal Conditioning Hypothesis
 
-The strategy must survive reasonable perturbations.
+Traditional equity signals such as momentum, value, quality, reversal, and analyst revisions perform differently depending on the option-implied risk environment.
 
-### Universe Robustness
+Examples:
 
-- All eligible optionable stocks.
-- Large-cap only.
-- High-equity-liquidity only.
-- High-option-liquidity only.
-- Sector-neutral universe.
-- Excluding microcaps.
-
-### Time Robustness
-
-- Full sample.
-- In-sample.
-- Out-of-sample.
-- High-volatility regimes.
-- Low-volatility regimes.
-- Crisis periods.
-- Post-crisis periods.
-
-### Signal Robustness
-
-- Alternative momentum windows.
-- Alternative realized volatility windows.
-- Alternative skew definitions.
-- Alternative VRP definitions.
-- Raw vs sector-neutral signals.
-- Raw vs ranked signals.
-
-### Cost Robustness
-
-- 0 bps.
-- 5 bps.
-- 10 bps.
-- 25 bps.
-- Liquidity-scaled costs, if implemented.
-
-### Placebo Tests
-
-- Shuffled options signals.
-- Lagged wrong-way options signals.
-- Random portfolios with same turnover.
-- Equity-only model with random option filter.
+```text
+momentum × implied volatility
+momentum × downside skew
+value × left-tail probability
+quality × volatility risk premium
+analyst revisions × option-implied uncertainty
+```
 
 ---
 
-## 16. Hard Rejection Criteria
+### H5: Practical Robustness Hypothesis
 
-The options-informed conditioning layer will be formally rejected if any of the following occur out of sample.
-
-### Rejection Rule 1: No Meaningful Improvement
-
-The options-informed model fails to improve the equity-only model on at least two of the following metrics:
-
-- Sharpe ratio.
-- Information ratio.
-- Max drawdown.
-- Sortino ratio.
-- 5% CVaR.
-- Turnover-adjusted net return.
-- Crisis-period drawdown.
-
-A Sharpe improvement smaller than approximately 0.15 will not be treated as economically meaningful unless accompanied by clear drawdown or tail-risk improvement.
-
-### Rejection Rule 2: Alpha Disappears After Risk Adjustment
-
-The apparent out-of-sample alpha disappears after controlling for:
-
-- Market beta.
-- Size.
-- Value.
-- Momentum.
-- Volatility.
-- Sector or industry exposure.
-- Liquidity.
-
-### Rejection Rule 3: Costs Absorb the Edge
-
-The strategy’s turnover increases enough that transaction costs absorb the gross outperformance.
-
-### Rejection Rule 4: Illiquidity Explains the Result
-
-The performance gains are concentrated in illiquid microcap stocks or names with unreliable or illiquid option chains.
-
-### Rejection Rule 5: Fragile Regime Dependence
-
-The strategy only works in one narrow market regime and fails across reasonable subperiods.
-
-### Rejection Rule 6: Data-Mining Concern
-
-The result only appears after repeated parameter tuning, signal modification, or test-period experimentation.
+Any apparent benefit from option-surface features must survive realistic implementation assumptions, including liquidity filters, transaction costs, point-in-time data alignment, sector and factor risk controls, out-of-sample validation, and regime splits.
 
 ---
 
-## 17. Research Log and Multiple-Testing Policy
+## 6. What This Project Is
 
-All experiments must be logged.
+This project is a combined mathematical finance and systematic research platform.
 
-Each experiment entry should record:
+It has two connected halves:
 
-- Date run.
-- Git commit hash.
-- Data version.
-- Model configuration.
-- Signal definitions.
-- Train/test period.
-- Transaction cost assumptions.
-- Performance metrics.
-- Notes on interpretation.
-- Whether the result was accepted or rejected.
+```text
+Half 1:
+Build the mathematical machinery.
 
-The final out-of-sample period cannot be repeatedly reused for tuning.
+Half 2:
+Use the machinery in real empirical research.
+```
 
-Failed experiments will be documented rather than silently discarded.
+The mathematical machinery includes:
+
+```text
+stochastic process simulation
+option pricing
+Greeks
+delta hedging
+implied-volatility inversion
+volatility smile construction
+volatility surface construction
+SABR calibration
+Breeden-Litzenberger density extraction
+risk-neutral moments
+Markov volatility regimes
+```
+
+The empirical research layer includes:
+
+```text
+CRSP equity returns
+OptionMetrics option chains
+Compustat fundamentals
+I/B/E/S analyst revisions
+equity signals
+option-surface signals
+volatility forecasting
+cross-sectional return prediction
+tail-risk filtering
+risk modelling
+portfolio construction
+transaction costs
+attribution
+robustness testing
+```
 
 ---
 
-## 18. Known Limitations
+## 7. What This Project Is Not
 
-This project will explicitly acknowledge the following limitations:
+This project is not:
 
-- OptionMetrics coverage restricts the universe to optionable stocks, likely biasing the sample toward larger and more liquid firms.
-- Some Compustat and I/B/E/S fields require careful timestamp validation to avoid lookahead bias.
-- The first transaction cost model is simplified and may understate true implementation costs.
-- The project uses options data to inform equity selection and risk control; the base project does not directly trade options.
-- Option-implied variables may proxy for known risks such as volatility, liquidity, size, or event uncertainty rather than unique alpha.
-- Backtested performance may not translate to live trading due to data latency, execution costs, crowding, and regime change.
+```text
+a trading bot
+a copied Black-Scholes calculator
+a yfinance backtester
+a pairs-trading notebook
+a generic factor backtest
+a random ML-on-stock-prices project
+a dashboard pretending to be research
+a project that blindly trusts vendor option fields
+```
+
+A standalone Black-Scholes implementation is not the final project. Black-Scholes is only the baseline used to build more serious tools such as implied-volatility inversion, Greeks, hedging-error simulations, volatility surfaces, SABR calibration, and risk-neutral density extraction.
 
 ---
 
-## 19. Final Deliverables
+## 8. Research Scope
 
-The final project should produce:
+The project focuses on US listed equities with available option-chain data.
 
-- Clean research dataset schema.
-- Data audit report.
-- Pricing/math finance module.
-- Equity signal module.
-- Options signal module.
-- Model comparison notebook.
-- Portfolio backtest notebook.
-- Risk and attribution report.
-- Robustness test report.
-- Final research memo.
-- GitHub repository with reproducible code and no proprietary raw data.
+The research will test three broad empirical applications:
 
-Raw WRDS, CRSP, Compustat, I/B/E/S, and OptionMetrics data must not be uploaded publicly.
+1. **Volatility forecasting**
+
+   * Can option-surface features predict future realized volatility?
+
+2. **Cross-sectional equity selection**
+
+   * Can option-surface features improve traditional equity alpha models?
+
+3. **Risk and portfolio control**
+
+   * Can option-implied tail-risk measures reduce drawdowns, improve position sizing, or improve portfolio construction?
+
+The project may also include a hedging-error study and a Markov volatility-regime module.
+
+---
+
+## 9. Data Sources
+
+### 9.1 Core Data Sources
+
+| Data Need                       | Source                                          | Purpose                                                                                          |
+| ------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Stock prices                    | CRSP                                            | Daily prices, returns, realized volatility, momentum, backtest returns                           |
+| Stock volume                    | CRSP                                            | Liquidity filters, ADV, transaction cost proxies                                                 |
+| Delisting returns               | CRSP                                            | Survivorship-bias control                                                                        |
+| Share codes and exchange codes  | CRSP                                            | Common-stock universe construction                                                               |
+| Market capitalization           | CRSP / Compustat                                | Size signal, liquidity screen, universe ranking                                                  |
+| Fundamentals                    | Compustat                                       | Value, quality, profitability, leverage, asset growth                                            |
+| Analyst forecasts and revisions | I/B/E/S                                         | Analyst revision signal, forecast dispersion, analyst coverage                                   |
+| Option chains                   | OptionMetrics IvyDB US                          | Option prices, strikes, expiries, implied volatility, Greeks if available, open interest, volume |
+| Rates / zero curves             | OptionMetrics / Datastream / treasury-rate data | Discounting and option pricing inputs                                                            |
+| Dividends                       | OptionMetrics / CRSP / Compustat                | Forward price adjustment and option pricing inputs                                               |
+| Index membership                | FTSE Russell / CRSP                             | Benchmark context and universe filtering                                                         |
+| Event-study data                | Eventus                                         | Optional event-study extension                                                                   |
+| News, filings, transcripts      | Factiva / Nexis / S&P Capital IQ Transcripts    | Optional later extension                                                                         |
+
+---
+
+### 9.2 Minimum Data Required for Version 1
+
+The minimum serious empirical version requires:
+
+```text
+CRSP
+OptionMetrics IvyDB US
+```
+
+This enables:
+
+```text
+equity returns
+realized volatility
+liquidity screens
+option-chain cleaning
+implied-volatility validation
+surface construction
+volatility forecasting
+basic equity/options comparison
+```
+
+---
+
+### 9.3 Data Added Later
+
+After the first CRSP and OptionMetrics version works, add:
+
+```text
+Compustat
+I/B/E/S
+```
+
+This enables:
+
+```text
+value signals
+quality signals
+profitability signals
+leverage signals
+analyst revision signals
+forecast dispersion signals
+richer equity-only baseline
+```
+
+Optional later datasets:
+
+```text
+FTSE Russell
+Eventus
+Factiva
+Nexis
+S&P Capital IQ Transcripts
+Datastream
+```
+
+---
+
+### 9.4 Data Licensing Rule
+
+Raw WRDS, CRSP, Compustat, I/B/E/S, and OptionMetrics data will not be published in the public GitHub repository.
 
 The public repository may include:
 
-- Source code.
-- Synthetic sample data.
-- Schemas.
-- Configuration files.
-- Unit tests.
-- Documentation.
-- Figures generated from permitted or synthetic outputs.
+```text
+source code
+configuration files
+schema definitions
+query templates
+data dictionaries
+synthetic sample data
+small fake option-chain examples
+generated figures
+methodology notes
+research reports
+```
+
+The public repository will not include:
+
+```text
+raw licensed data
+full proprietary option chains
+raw CRSP extracts
+raw Compustat extracts
+raw I/B/E/S extracts
+raw OptionMetrics extracts
+```
 
 ---
 
-## 20. Final Research Decision
+## 10. Initial Universe Definition
 
-The final report must conclude one of the following.
+### 10.1 Base Universe
 
-### Accept Conditionally
+The base universe will consist of:
 
-The options-informed layer improves the equity-only model after costs, risk adjustment, and robustness testing.
+```text
+US listed optionable equities
+common shares only
+NYSE / AMEX / NASDAQ listings
+sufficient CRSP price history
+sufficient OptionMetrics option-chain coverage
+minimum stock liquidity
+minimum option liquidity
+```
 
-### Reject
+---
 
-The options-informed layer fails to improve the equity-only model or only appears to work due to overfitting, illiquidity, or hidden risk exposure.
+### 10.2 Suggested First Empirical Universe
 
-### Continue Research
+The first empirical universe will be:
 
-The options layer does not clearly improve returns but shows evidence of useful drawdown control, volatility filtering, or risk management value.
+```text
+Top 500 to 1000 US stocks by rolling dollar volume among stocks with usable OptionMetrics option chains
+```
 
-The goal is not to force a profitable strategy. The goal is to determine honestly whether options-implied information adds value to systematic equity research.
+This is preferred over “all stocks” because option-chain data is sparse, noisy, and liquidity-dependent.
+
+---
+
+### 10.3 Equity Filters
+
+Initial equity filters:
+
+```text
+common shares only
+valid CRSP identifier
+valid trading date
+price greater than $5
+minimum 252 trading days of return history
+positive rolling dollar volume
+top liquidity universe by rolling ADV
+exclude obvious stale-price observations
+include delisting returns where applicable
+```
+
+---
+
+### 10.4 Option Filters
+
+Initial option-chain filters:
+
+```text
+valid underlying link
+valid option type
+valid expiration date
+positive time to expiry
+non-missing strike
+non-missing bid and ask
+bid >= 0
+ask >= bid
+positive midpoint
+minimum option open interest or volume
+exclude extreme implied-volatility observations
+exclude options with too few days to expiry
+exclude options with excessive time to expiry for baseline tests
+keep liquid OTM calls and puts for surface construction
+require minimum number of valid strikes per maturity
+```
+
+---
+
+### 10.5 Initial Maturity Buckets
+
+Initial maturity buckets:
+
+```text
+approximately 30 days
+approximately 60 days
+approximately 91 days
+```
+
+These may later be expanded.
+
+---
+
+## 11. Data Engineering Principles
+
+The data pipeline must enforce:
+
+```text
+point-in-time alignment
+security identifier mapping
+date alignment
+data availability dates
+signal availability dates
+portfolio formation dates
+execution dates
+return realization dates
+survivorship-bias control
+lookahead-bias prevention
+data-quality auditing
+reproducibility
+```
+
+The key timing rule is:
+
+```text
+signal_date < portfolio_formation_date < execution_date < return_realization_date
+```
+
+No same-close execution assumption should be used unless explicitly labelled as a non-tradable diagnostic.
+
+---
+
+## 12. Mathematical Finance Engine
+
+The mathematical finance layer will be built before the full empirical research layer.
+
+### 12.1 Stochastic Process Module
+
+Path simulators to implement:
+
+```text
+Brownian motion
+Arithmetic Brownian motion
+Geometric Brownian motion
+Ornstein-Uhlenbeck process
+Merton jump diffusion
+Heston stochastic volatility process
+Brownian bridge
+```
+
+Concepts covered:
+
+```text
+Wiener process
+drift
+diffusion
+Euler-Maruyama discretization
+Monte Carlo simulation
+quadratic variation
+mean reversion
+stochastic volatility
+jump risk
+model misspecification
+```
+
+Required tests:
+
+```text
+GBM log returns have approximately correct mean and variance
+Brownian increments are approximately independent
+OU process mean-reverts
+Heston variance remains non-negative or is handled explicitly
+jump diffusion produces heavier tails than GBM
+```
+
+---
+
+### 12.2 Option Pricing Module
+
+Pricing methods to implement:
+
+```text
+Black-Scholes European call and put pricing
+binomial tree pricing
+American option binomial pricing
+Monte Carlo European option pricing
+Asian option pricing
+barrier option pricing
+digital option pricing
+```
+
+Concepts covered:
+
+```text
+risk-neutral pricing
+replication
+no-arbitrage
+put-call parity
+discounting
+terminal payoff
+early exercise
+path dependence
+Monte Carlo error
+```
+
+Required tests:
+
+```text
+put-call parity holds
+binomial European prices converge to Black-Scholes prices
+American call without dividends is approximately equal to European call
+Monte Carlo prices converge as number of paths increases
+finite-difference Greeks match analytic Greeks
+```
+
+---
+
+### 12.3 Greeks Module
+
+Greeks to implement:
+
+```text
+delta
+gamma
+vega
+theta
+rho
+```
+
+Uses:
+
+```text
+risk measurement
+delta hedging
+hedging-error simulations
+option-chain diagnostics
+surface-aware risk interpretation
+```
+
+---
+
+### 12.4 Delta-Hedging Module
+
+The hedging module will simulate the P&L of discretely delta-hedged option positions.
+
+Experiments:
+
+```text
+GBM world with correct volatility and no transaction costs
+GBM world with incorrect volatility
+jump-diffusion world hedged with Black-Scholes delta
+Heston world hedged with Black-Scholes delta
+discrete hedging with transaction costs
+different rebalancing frequencies
+```
+
+Outputs:
+
+```text
+hedging P&L distribution
+mean hedging error
+variance of hedging error
+tail hedging losses
+effect of rebalancing frequency
+effect of wrong volatility
+effect of jumps
+effect of transaction costs
+```
+
+Research purpose:
+
+```text
+understand the difference between pricing an option and managing the risk of an option book
+```
+
+---
+
+## 13. Option Surface Engine
+
+### 13.1 Implied Volatility Solver
+
+The implied-volatility solver will take:
+
+```text
+option price
+spot price
+strike
+time to expiry
+risk-free rate
+dividend yield
+call/put flag
+```
+
+and return:
+
+```text
+implied volatility
+convergence flag
+failure reason
+```
+
+Methods:
+
+```text
+bisection
+Newton-Raphson
+hybrid Newton-bisection fallback
+```
+
+Failure flags:
+
+```text
+success
+failed_no_arbitrage_bounds
+failed_no_convergence
+failed_bad_input
+failed_low_vega
+```
+
+Validation:
+
+```text
+compare self-computed implied volatility against OptionMetrics implied volatility where available
+analyze errors by moneyness
+analyze errors by maturity
+analyze errors by liquidity
+analyze errors by option type
+```
+
+---
+
+### 13.2 Volatility Smile Construction
+
+Smile construction will estimate implied volatility as a function of strike or moneyness for a fixed maturity.
+
+Definitions:
+
+```text
+moneyness = K / S
+log_moneyness = log(K / F)
+```
+
+Initial outputs:
+
+```text
+ATM implied volatility
+put-call skew
+smile slope
+smile curvature
+smile fit error
+```
+
+---
+
+### 13.3 Volatility Surface Construction
+
+The volatility surface will estimate implied volatility as a function of strike or moneyness and maturity.
+
+Surface object:
+
+```text
+IV(K, T)
+```
+
+Initial methods:
+
+```text
+moneyness buckets
+maturity buckets
+linear interpolation
+spline smoothing
+```
+
+Advanced method:
+
+```text
+SABR calibration
+```
+
+Surface outputs:
+
+```text
+atm_iv_30d
+atm_iv_60d
+atm_iv_91d
+term_structure_slope
+skew_30d
+skew_91d
+surface_curvature
+surface_smoothness_error
+surface_coverage_score
+```
+
+---
+
+### 13.4 SABR Calibration
+
+The SABR model will be used to fit option smiles and extract interpretable volatility-surface parameters.
+
+Parameters:
+
+```text
+alpha: volatility level
+rho: return-volatility correlation / skew proxy
+nu: vol-of-vol
+beta: fixed elasticity parameter
+```
+
+Baseline beta choices:
+
+```text
+beta = 0.5
+beta = 1.0
+```
+
+Calibration objective:
+
+```text
+minimize squared error between observed implied volatilities and SABR-implied volatilities
+```
+
+Calibration methods:
+
+```text
+scipy.optimize.least_squares
+bounded optimization
+multiple initializations
+robust loss function where needed
+```
+
+Extracted features:
+
+```text
+sabr_alpha
+sabr_rho
+sabr_nu
+sabr_fit_error
+sabr_parameter_stability
+```
+
+Interpretation:
+
+```text
+alpha: volatility level
+rho: implied asymmetry or leverage-effect proxy
+nu: volatility-of-volatility or surface instability
+fit error: model misspecification or noisy surface
+```
+
+---
+
+### 13.5 Breeden-Litzenberger Risk-Neutral Density Extraction
+
+The density module will extract a risk-neutral probability density from option prices.
+
+Concept:
+
+```text
+call prices across strikes
+→ smooth call price curve
+→ second derivative with respect to strike
+→ risk-neutral density
+```
+
+Implementation path:
+
+```text
+clean option chain
+fit or smooth implied-volatility smile
+generate dense strike grid
+convert smoothed implied volatilities back to call prices
+apply second-order finite differences
+normalize and validate density
+compute risk-neutral moments
+```
+
+Risk-neutral features:
+
+```text
+risk_neutral_mean
+risk_neutral_variance
+risk_neutral_skewness
+risk_neutral_kurtosis
+left_tail_probability
+right_tail_probability
+crash_probability_proxy
+density_entropy
+```
+
+Required tests:
+
+```text
+density integrates approximately to 1
+density is mostly non-negative
+moments are finite
+density behaves sensibly on synthetic Black-Scholes data
+density flags low-quality chains
+```
+
+---
+
+## 14. Equity Signal Engine
+
+### 14.1 CRSP-Based Signals
+
+Signals from CRSP:
+
+```text
+momentum_12_1
+short_term_reversal
+realized_vol_21d
+realized_vol_63d
+realized_skew
+realized_kurtosis
+dollar_volume
+turnover
+size
+market_beta
+liquidity_score
+```
+
+---
+
+### 14.2 Compustat-Based Signals
+
+Signals from Compustat:
+
+```text
+book_to_market
+earnings_yield
+gross_profitability
+return_on_equity
+leverage
+asset_growth
+quality_composite
+```
+
+Compustat signals must be lagged to avoid lookahead bias.
+
+Initial assumption:
+
+```text
+fundamental data is available only after a conservative reporting lag
+```
+
+---
+
+### 14.3 I/B/E/S-Based Signals
+
+Signals from I/B/E/S:
+
+```text
+EPS forecast revision
+revenue forecast revision
+recommendation revision
+forecast dispersion
+analyst coverage
+earnings surprise proxy
+```
+
+I/B/E/S signals must use only information available as of the signal date.
+
+---
+
+### 14.4 Signal Normalization
+
+For each raw signal:
+
+```text
+winsorize extreme values
+z-score cross-sectionally
+rank cross-sectionally
+sector-neutralize where appropriate
+size-neutralize where appropriate
+track missingness
+track coverage
+track signal turnover
+lag correctly
+```
+
+---
+
+## 15. Options Signal Engine
+
+### 15.1 Vendor Options Signals
+
+Vendor options signals from OptionMetrics where available:
+
+```text
+vendor_atm_iv_30d
+vendor_atm_iv_60d
+vendor_atm_iv_91d
+vendor_delta
+vendor_gamma
+vendor_vega
+vendor_skew
+option_volume
+open_interest
+put_call_volume_ratio
+```
+
+These are baseline option features.
+
+---
+
+### 15.2 Simple Self-Derived Options Signals
+
+Signals derived using the project’s own IV solver:
+
+```text
+my_atm_iv_30d
+my_atm_iv_60d
+my_atm_iv_91d
+my_put_call_skew
+my_term_structure_slope
+my_volatility_risk_premium
+my_option_liquidity_score
+```
+
+Volatility risk premium definitions:
+
+```text
+VRP_vol = implied_volatility - realized_volatility
+VRP_var = implied_variance - realized_variance
+```
+
+The variance version is preferred for more advanced tests.
+
+---
+
+### 15.3 Advanced Surface-Derived Signals
+
+Signals derived from SABR and density extraction:
+
+```text
+sabr_alpha
+sabr_rho
+sabr_nu
+sabr_fit_error
+sabr_parameter_stability
+risk_neutral_skewness
+risk_neutral_kurtosis
+left_tail_probability
+crash_probability_proxy
+density_entropy
+surface_curvature
+surface_dislocation_score
+```
+
+These are the core mathematical research features.
+
+---
+
+## 16. Target Variables
+
+### 16.1 Future Equity Returns
+
+```text
+forward_21d_excess_return
+forward_63d_excess_return
+```
+
+Used for:
+
+```text
+cross-sectional equity return prediction
+long-short portfolio construction
+alpha model evaluation
+```
+
+---
+
+### 16.2 Future Realized Volatility
+
+```text
+future_realized_vol_21d
+future_realized_vol_63d
+```
+
+Used for:
+
+```text
+volatility forecasting
+options-feature validation
+risk prediction
+```
+
+---
+
+### 16.3 Future Drawdown and Tail Events
+
+```text
+future_min_return_21d
+future_min_return_63d
+future_drawdown_63d
+large_negative_return_indicator
+```
+
+Used for:
+
+```text
+tail-risk prediction
+drawdown filtering
+risk-control evaluation
+```
+
+---
+
+### 16.4 Hedging Error
+
+```text
+future_delta_hedge_error
+future_gamma_pnl_proxy
+simulated_hedging_error
+```
+
+Used for:
+
+```text
+option risk research
+market-making-style hedging analysis
+model-misspecification experiments
+```
+
+---
+
+## 17. Strategy Families and Experiments
+
+### 17.1 Experiment A: Stochastic Pricing Validation
+
+Question:
+
+```text
+Does the pricing engine behave correctly on synthetic data?
+```
+
+Tests:
+
+```text
+binomial convergence
+put-call parity
+Monte Carlo convergence
+Greek finite-difference checks
+hedging error under GBM
+```
+
+Purpose:
+
+```text
+prove that the mathematical engine works before applying it to real data
+```
+
+---
+
+### 17.2 Experiment B: OptionMetrics IV Validation
+
+Question:
+
+```text
+Can the self-built implied-volatility solver reproduce vendor implied volatility?
+```
+
+Inputs:
+
+```text
+OptionMetrics option prices
+underlying price
+strike
+expiry
+risk-free rate
+dividend yield
+call/put flag
+```
+
+Outputs:
+
+```text
+my_iv
+vendor_iv
+iv_error
+error by moneyness
+error by maturity
+error by liquidity
+error by option type
+```
+
+Purpose:
+
+```text
+validate the first-principles implementation on real option data
+```
+
+---
+
+### 17.3 Experiment C: Surface Calibration Quality
+
+Question:
+
+```text
+Can SABR fit single-name equity option smiles reliably enough to extract useful research features?
+```
+
+Outputs:
+
+```text
+SABR alpha
+SABR rho
+SABR nu
+fit error
+coverage
+parameter stability
+```
+
+Purpose:
+
+```text
+test whether advanced mathematical features are stable or too noisy
+```
+
+---
+
+### 17.4 Experiment D: Risk-Neutral Density Extraction
+
+Question:
+
+```text
+Can stable risk-neutral moments be extracted from cleaned and smoothed option chains?
+```
+
+Outputs:
+
+```text
+risk-neutral skewness
+risk-neutral kurtosis
+left-tail probability
+density quality flags
+```
+
+Purpose:
+
+```text
+derive interpretable tail-risk features from option prices
+```
+
+---
+
+### 17.5 Experiment E: Volatility Forecasting
+
+Question:
+
+```text
+Do option-surface features predict future realized volatility?
+```
+
+Compare:
+
+```text
+historical realized volatility baseline
+vendor ATM implied volatility
+self-derived implied volatility
+volatility risk premium
+SABR features
+risk-neutral density features
+combined model
+```
+
+Evaluation:
+
+```text
+RMSE
+MAE
+rank IC
+volatility bucket accuracy
+high-volatility event detection
+out-of-sample performance
+```
+
+Purpose:
+
+```text
+test the most natural empirical use case for option-implied information
+```
+
+---
+
+### 17.6 Experiment F: Equity Return Prediction
+
+Question:
+
+```text
+Do option-surface features improve cross-sectional equity return prediction?
+```
+
+Compare:
+
+```text
+equity-only model
+equity + vendor options fields
+equity + self-derived IV/skew/VRP
+equity + SABR features
+equity + risk-neutral density features
+full model
+```
+
+Evaluation:
+
+```text
+rank IC
+quintile spread
+decile spread
+long-short returns
+factor-adjusted returns
+out-of-sample performance
+```
+
+Purpose:
+
+```text
+test whether mathematically derived options features improve systematic equity research
+```
+
+---
+
+### 17.7 Experiment G: Tail-Risk Filter
+
+Question:
+
+```text
+Can option-implied left-tail features reduce drawdowns without destroying returns?
+```
+
+Compare:
+
+```text
+base equity strategy
+base equity strategy + skew filter
+base equity strategy + risk-neutral left-tail filter
+base equity strategy + SABR rho/nu filter
+```
+
+Evaluation:
+
+```text
+max drawdown
+CVaR
+worst-month return
+left-tail return distribution
+return sacrificed
+net Sharpe
+turnover change
+```
+
+Purpose:
+
+```text
+test whether option-implied risk measures are useful as risk filters rather than pure alpha signals
+```
+
+---
+
+### 17.8 Experiment H: Portfolio Construction
+
+Question:
+
+```text
+Does the options-informed model survive realistic risk and cost constraints?
+```
+
+Compare:
+
+```text
+naive decile portfolio
+risk-controlled portfolio
+cost-aware portfolio
+tail-risk-filtered portfolio
+surface-derived optimized portfolio
+```
+
+Evaluation:
+
+```text
+gross return
+net return
+Sharpe ratio
+information ratio
+max drawdown
+CVaR
+turnover
+cost drag
+factor exposure
+sector exposure
+capacity proxy
+```
+
+Purpose:
+
+```text
+move from signal research to implementable portfolio research
+```
+
+---
+
+### 17.9 Experiment I: Volatility-Regime Markov Model
+
+Question:
+
+```text
+Do signals behave differently across volatility regimes?
+```
+
+Possible states:
+
+```text
+calm
+implied-risk rising
+realized stress
+crisis
+normalization
+```
+
+Outputs:
+
+```text
+transition matrix
+state persistence
+probability of moving to stress state
+expected time in each state
+signal performance by regime
+strategy performance by regime
+```
+
+Purpose:
+
+```text
+integrate Markov chains coherently without making them a separate unrelated project
+```
+
+---
+
+## 18. Model Comparison Framework
+
+### 18.1 Main Models
+
+| Model | Inputs                                 | Purpose                                      |
+| ----- | -------------------------------------- | -------------------------------------------- |
+| M0    | Historical realized volatility only    | Volatility forecast baseline                 |
+| M1    | Equity signals only                    | Equity alpha baseline                        |
+| M2    | Equity + vendor options fields         | Test basic options data                      |
+| M3    | Equity + self-derived IV/skew/VRP      | Test simple first-principles option layer    |
+| M4    | Equity + SABR features                 | Test volatility-surface calibration features |
+| M5    | Equity + risk-neutral density features | Test tail/distribution features              |
+| M6    | Equity + all options features          | Full options-informed model                  |
+| M7    | Full model with risk filter            | Practical implementation model               |
+
+---
+
+### 18.2 Initial Model Types
+
+Initial models:
+
+```text
+equal-weight composite score
+cross-sectional OLS
+ridge regression
+lasso regression
+logistic regression for tail-event prediction
+```
+
+Optional later models:
+
+```text
+gradient boosting
+random forest
+```
+
+Deep learning will not be used unless there is a clear reason.
+
+---
+
+### 18.3 Validation Design
+
+The project will use time-aware validation.
+
+Allowed validation methods:
+
+```text
+walk-forward validation
+rolling training window
+expanding training window
+out-of-sample test period
+regime split testing
+```
+
+Not allowed:
+
+```text
+random train/test split across dates
+tuning on the final test set
+using future fundamentals
+using same-day close execution unless labelled non-tradable
+using today’s identifiers for historical security mapping without point-in-time checks
+```
+
+---
+
+## 19. Risk Model
+
+The risk model will decompose stock returns into systematic and residual components.
+
+Model form:
+
+```text
+stock return = market + sector + style factors + residual
+```
+
+Candidate factors:
+
+```text
+market
+sector / industry
+size
+value
+momentum
+quality
+volatility
+liquidity
+option-implied volatility factor
+```
+
+Outputs:
+
+```text
+factor exposures
+factor returns
+specific returns
+factor covariance
+specific risk
+portfolio predicted volatility
+factor contribution to risk
+specific contribution to risk
+```
+
+Purpose:
+
+```text
+ensure that apparent alpha is not merely hidden exposure to market beta, sector, size, volatility, liquidity, or other systematic factors
+```
+
+---
+
+## 20. Portfolio Construction
+
+### 20.1 Portfolio Objective
+
+The portfolio optimizer will conceptually solve:
+
+```text
+maximize expected alpha
+minus risk penalty
+minus transaction cost penalty
+minus tail-risk penalty
+```
+
+Mathematical form:
+
+```text
+maximize: alphaᵀw - λ wᵀΣw - cost(w - w_prev) - γ tail_risk(w)
+```
+
+---
+
+### 20.2 Constraints
+
+Candidate constraints:
+
+```text
+dollar neutrality
+beta neutrality
+sector bounds
+max single-name position
+max gross exposure
+max net exposure
+liquidity-scaled position limits
+turnover cap
+option-data coverage requirement
+tail-risk exposure limit
+minimum diversification
+```
+
+---
+
+### 20.3 Portfolio Variants
+
+Portfolio variants:
+
+```text
+P1: naive long-short decile portfolio
+P2: risk-neutralized long-short portfolio
+P3: cost-aware optimized portfolio
+P4: options-informed risk-filtered portfolio
+P5: full surface-derived optimized portfolio
+```
+
+Purpose:
+
+```text
+show the path from raw signal to implementable portfolio
+```
+
+---
+
+## 21. Transaction Cost Model
+
+### 21.1 Base Cost Model
+
+Initial cost model:
+
+```text
+cost_i = fixed_bps + spread_bps_i + impact_coeff * volatility_i * sqrt(order_size_i / ADV_i)
+```
+
+Where:
+
+```text
+fixed_bps = baseline fixed trading cost
+spread_bps_i = bid-ask spread proxy
+impact_coeff = assumed market-impact coefficient
+volatility_i = recent realized volatility
+order_size_i = dollar value traded
+ADV_i = average daily dollar volume
+```
+
+---
+
+### 21.2 Cost Stress Tests
+
+The project will test:
+
+```text
+0 bps
+5 bps
+10 bps
+25 bps
+2x base cost
+5x base cost
+```
+
+The purpose is not to claim the exact cost model is correct. The purpose is to test whether results survive plausible cost assumptions.
+
+---
+
+### 21.3 Cost Outputs
+
+Outputs:
+
+```text
+gross return
+net return
+turnover
+cost drag
+capacity proxy
+participation rate
+implementation shortfall
+```
+
+---
+
+## 22. Backtesting Design
+
+The backtester will be calendar-driven.
+
+Backtest loop:
+
+```text
+for each rebalance date:
+    define eligible universe
+    load only data known as of that date
+    compute equity signals
+    compute options signals
+    generate forecasts
+    estimate risk
+    optimize portfolio
+    simulate trades at next tradable date
+    subtract transaction costs
+    record returns, holdings, trades, exposures
+```
+
+Critical timing rule:
+
+```text
+signal_date < portfolio_formation_date < execution_date < return_realization_date
+```
+
+Outputs:
+
+```text
+holdings
+trades
+daily returns
+monthly returns
+turnover
+transaction costs
+factor exposures
+sector exposures
+drawdowns
+attribution
+```
+
+---
+
+## 23. Attribution
+
+The attribution system will decompose performance into:
+
+```text
+equity signal contribution
+vendor option signal contribution
+self-derived IV/skew/VRP contribution
+SABR signal contribution
+density signal contribution
+market beta contribution
+sector contribution
+style factor contribution
+volatility exposure contribution
+tail-risk filter contribution
+transaction cost drag
+turnover drag
+long book contribution
+short book contribution
+```
+
+Questions attribution should answer:
+
+```text
+Did options data add return?
+Did options data reduce drawdown?
+Did SABR features matter, or only simple IV?
+Did density features help avoid crashes?
+Was improvement just lower beta?
+Was improvement just lower volatility exposure?
+Did transaction costs erase the benefit?
+Was performance concentrated in one regime?
+```
+
+---
+
+## 24. Robustness and Falsification
+
+### 24.1 Data Robustness
+
+Test:
+
+```text
+different equity liquidity thresholds
+different option open-interest filters
+different moneyness windows
+different maturity buckets
+large-cap only universe
+high-option-liquidity universe
+excluding earnings periods
+excluding low-price stocks
+excluding low-volume stocks
+```
+
+---
+
+### 24.2 Model Robustness
+
+Test:
+
+```text
+vendor IV only
+self-derived IV only
+SABR only
+density only
+combined options model
+equity-only model
+options-only model
+no equity signals
+no options signals
+```
+
+---
+
+### 24.3 Time Robustness
+
+Test across:
+
+```text
+pre-crisis periods
+crisis periods
+post-crisis periods
+COVID period
+high-rate period
+low-volatility regimes
+high-volatility regimes
+```
+
+Exact periods will be determined by data availability and final sample window.
+
+---
+
+### 24.4 Cost Robustness
+
+Test:
+
+```text
+zero costs
+base costs
+2x costs
+5x costs
+```
+
+---
+
+### 24.5 Placebo Tests
+
+Placebo tests:
+
+```text
+shuffle option signals cross-sectionally
+lag option signals incorrectly as a negative control
+random portfolios with the same turnover
+randomized tail-risk filter
+same equity model with fake option features
+```
+
+---
+
+### 24.6 Statistical Robustness
+
+Statistical checks:
+
+```text
+rolling IC
+rank IC stability
+bootstrap confidence intervals
+Sharpe confidence intervals
+multiple-testing log
+deflated Sharpe ratio if feasible
+```
+
+---
+
+## 25. Rejection Criteria
+
+The options-surface layer should be rejected or downgraded if:
+
+```text
+it only improves in-sample performance
+it fails out of sample
+it only works in illiquid option names
+it is subsumed by simple realized volatility
+it is subsumed by beta, size, sector, or liquidity exposure
+it adds turnover without improving net performance
+it improves raw return but worsens drawdown materially
+it depends on unstable SABR calibration parameters
+it fails under alternative option filters
+it fails under alternative date ranges
+it fails under realistic transaction cost assumptions
+it cannot be explained economically
+```
+
+A negative result is acceptable if it is well-documented.
+
+The goal is not to force the strategy to work. The goal is to test whether mathematically derived option-surface features contain robust, useful information.
+
+---
+
+## 26. Known Limitations
+
+Expected limitations:
+
+```text
+OptionMetrics data access and licensing constraints
+single-name option data can be sparse and noisy
+SABR calibration may be unstable for illiquid names
+risk-neutral density extraction is sensitive to smoothing
+transaction cost model is approximate
+shorting costs may be simplified or excluded initially
+fundamental data availability assumptions may be conservative but imperfect
+earnings dates and event effects may require separate handling
+results may be universe-dependent
+results may be regime-dependent
+surface-derived features may not beat simpler vendor fields
+```
+
+These limitations should be reported explicitly rather than hidden.
+
+---
+
+## 27. Minimum Viable Version
+
+The minimum impressive version of the project includes:
+
+```text
+1. Black-Scholes pricing
+2. binomial tree pricing
+3. Greeks
+4. GBM simulation
+5. Heston or jump-diffusion simulation
+6. delta-hedging error simulation
+7. implied-volatility solver
+8. OptionMetrics IV validation
+9. simple volatility smile/surface construction
+10. vendor vs self-derived IV/skew comparison
+11. volatility forecasting test
+12. equity-only vs equity + options model
+13. final research report
+```
+
+SABR and Breeden-Litzenberger are not required for the minimum version, but they are part of the target full version.
+
+---
+
+## 28. Full Target Version
+
+The full target version includes:
+
+```text
+stochastic process simulation
+Black-Scholes pricing
+binomial pricing
+Monte Carlo pricing
+Greeks
+delta hedging error
+implied-volatility solver
+option-chain cleaning
+volatility smile construction
+volatility surface construction
+SABR calibration
+Breeden-Litzenberger density extraction
+equity signals
+vendor option signals
+self-derived option signals
+volatility forecasting
+cross-sectional equity return prediction
+tail-risk filtering
+Markov volatility-regime model
+risk model
+portfolio optimizer
+transaction cost model
+backtesting engine
+attribution
+robustness suite
+final research report
+```
+
+---
+
+## 29. Exceptional Version
+
+The exceptional version adds:
+
+```text
+SABR calibration across many stock-date-maturity observations
+risk-neutral density extraction with quality flags
+implied skewness and kurtosis features
+left-tail probability features
+Markov volatility-regime model
+cost-aware portfolio optimization
+factor risk attribution
+capacity analysis
+deflated Sharpe ratio
+rejected-strategies appendix
+clean synthetic data examples
+professional documentation
+interview summary
+```
+
+---
+
+## 30. Deliverables
+
+Final deliverables:
+
+```text
+research_charter.md
+README.md
+theory_notes.md
+limitations.md
+data_dictionary.md
+math_reference.md
+synthetic sample data
+source code package
+unit tests
+notebooks
+figures
+tables
+final_research_report.pdf
+interview_summary.md
+```
+
+---
+
+## 31. First Build Milestone
+
+The first build milestone is not to download WRDS data.
+
+The first build milestone is:
+
+```text
+create repository
+create synthetic option chain
+implement Black-Scholes call and put pricing
+implement binomial tree pricing
+show binomial convergence to Black-Scholes
+add put-call parity test
+write first README draft
+```
+
+This gives the project a working mathematical foundation before real data is introduced.
+
+---
+
+## 32. First Ten-Week Roadmap
+
+### Week 1: Pricing Skeleton
+
+```text
+repo setup
+synthetic option chain
+Black-Scholes implementation
+binomial tree implementation
+put-call parity tests
+binomial convergence plot
+```
+
+---
+
+### Week 2: Stochastic Simulation and Greeks
+
+```text
+GBM simulation
+Monte Carlo option pricing
+analytic Greeks
+finite-difference Greeks
+basic tests
+```
+
+---
+
+### Week 3: Hedging Error
+
+```text
+delta-hedging simulator
+GBM hedging experiment
+wrong-volatility experiment
+jump-risk experiment
+transaction-cost experiment
+```
+
+---
+
+### Week 4: Implied Volatility Solver
+
+```text
+bisection solver
+Newton-Raphson solver
+hybrid fallback
+synthetic IV tests
+failure flags
+```
+
+---
+
+### Week 5: OptionMetrics Small Extract
+
+```text
+load small OptionMetrics sample
+clean option chains
+compute self-derived IV
+compare against vendor IV
+produce IV validation report
+```
+
+---
+
+### Week 6: Volatility Smile and Surface
+
+```text
+construct smiles by maturity
+construct simple surfaces
+compute ATM IV, skew, term structure
+produce surface diagnostics
+```
+
+---
+
+### Week 7: SABR Calibration
+
+```text
+implement SABR calibration
+fit selected liquid names
+analyze alpha/rho/nu
+track fit error and stability
+```
+
+---
+
+### Week 8: Risk-Neutral Density
+
+```text
+smooth call price curve
+finite-difference density extraction
+density validation
+compute implied skewness, kurtosis, left-tail probability
+```
+
+---
+
+### Week 9: Empirical Signal Tests
+
+```text
+build CRSP return panel
+construct realized volatility
+construct basic equity signals
+merge option-surface signals
+run volatility forecasting tests
+run equity signal comparison
+```
+
+---
+
+### Week 10: Backtest and Report
+
+```text
+equity-only baseline
+equity + vendor options baseline
+equity + self-derived options model
+basic transaction costs
+basic attribution
+robustness summary
+final report draft
+```
+
+---
+
+## 33. Final Research Comparison
+
+The final empirical comparison is:
+
+```text
+Equity-only model
+vs
+Equity + vendor options fields
+vs
+Equity + self-derived IV/skew/VRP
+vs
+Equity + SABR surface features
+vs
+Equity + risk-neutral density features
+```
+
+This comparison preserves the systematic equity research project while adding the mathematical finance depth required for options and market-making relevance.
+
+---
+
+## 34. Success Criteria
+
+The project is successful if it can answer, with evidence:
+
+```text
+whether self-derived implied volatility matches vendor implied volatility
+whether option-surface features forecast realized volatility
+whether option-surface features improve equity return prediction
+whether tail-risk features reduce drawdowns
+whether advanced features beat simple vendor options fields
+whether results survive liquidity filters
+whether results survive transaction costs
+whether results survive out-of-sample validation
+whether the mathematical models are stable enough to be useful
+```
+
+The project does not require a profitable strategy to be successful.
+
+A mature negative result is acceptable.
+
+---
+
+## 35. Expected Interview Explanation
+
+### 30-Second Explanation
+
+```text
+I built a volatility-surface research platform that connects mathematical finance with systematic equity research. First, I implemented stochastic process simulators, option pricers, Greeks, implied-volatility solvers, volatility surfaces, SABR calibration, and risk-neutral density extraction from first principles. Then I applied those tools to real option-chain and equity data to test whether derived option-implied features improve volatility forecasting, cross-sectional equity selection, tail-risk control, and portfolio construction.
+```
+
+---
+
+### 2-Minute Explanation
+
+```text
+The project has two layers. The first is a mathematical finance layer, where I build the option-pricing and volatility tools myself: Black-Scholes, binomial trees, Monte Carlo pricing, Greeks, delta-hedging simulations, implied-volatility inversion, surface construction, SABR calibration, and Breeden-Litzenberger density extraction. The second layer is an empirical research platform using CRSP, OptionMetrics, Compustat, and I/B/E/S data. I compare equity-only models against models that use vendor options fields and models that use my own surface-derived features. The main question is whether mathematically derived option-implied risk measures add useful information for volatility forecasting, equity selection, drawdown control, and portfolio construction after controlling for liquidity, transaction costs, factor risk, and out-of-sample validation.
+```
+
+---
+
+## 36. Final Positioning
+
+This project is designed to signal four abilities at once:
+
+```text
+1. Mathematical finance ability:
+   I can implement stochastic and option-pricing models from first principles.
+
+2. Empirical research ability:
+   I can test hypotheses using real financial data without lookahead or survivorship bias.
+
+3. Portfolio/risk ability:
+   I understand risk models, transaction costs, attribution, and implementation constraints.
+
+4. Software engineering ability:
+   I can build a modular, tested, reproducible research codebase.
+```
+
+The project is not simply:
+
+```text
+an equity backtest plus an option pricer
+```
+
+It is:
+
+```text
+a system for deriving option-implied beliefs from market prices and testing whether those beliefs matter in real empirical research
+```
+
+That is the central identity of the project.
+
+---
