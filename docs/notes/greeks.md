@@ -2,6 +2,16 @@
 
 > **AI assistance note:** The original ideas, examples, and structure were provided by the author. AI was used to correct grammar, improve formatting, clarify explanations, and complete the mathematical formulas.
 
+## Understanding d_1 and d_2
+
+### d_2
+
+{insert formulaa for d_2} 
+
+N{d2} is the risk neutral probability that the option finishes in the money. Risk neutrality means we choose the stocks expected return to be the risk free rate, (SOFR)
+
+
+
 The **Greeks** are calculations used to measure the different factors that affect an option’s price.
 
 They are risk-management tools that help traders understand how an option’s value may change when factors such as the underlying price, time to expiration, implied volatility, and interest rates change.
